@@ -89,11 +89,32 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date() });
 });
 
+// Middleware to ensure MongoDB is connected (for API routes)
+let mongoConnected = false;
+
+app.use('/api', async (req, res, next) => {
+  if (!mongoConnected) {
+    try {
+      console.log('🔄 Initializing MongoDB connection...');
+      await mongoDatabase.connect();
+      mongoConnected = true;
+      console.log('✅ MongoDB connected via middleware');
+    } catch (error) {
+      console.error('❌ MongoDB connection failed:', error.message);
+      return res.status(503).json({
+        success: false,
+        message: 'Database connection failed. Please try again later.',
+      });
+    }
+  }
+  next();
+});
+
 // Routes
 app.use('/api/users', userRoutes);
 app.use('/api/payments', paymentRoutes);
 
-// Error handling middleware
+// Error handling middleware (must be last)
 app.use((err, req, res, next) => {
   console.error('❌ Error:', err);
   res.status(err.status || 500).json({
@@ -111,6 +132,7 @@ async function start() {
     
     // Connect to MongoDB
     await mongoDatabase.connect();
+    mongoConnected = true;
     
     // Only use app.listen in local development
     if (process.env.NODE_ENV !== 'production') {
